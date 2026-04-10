@@ -16,7 +16,10 @@
     "zustand": "^4.5.0",
     "dayjs": "^1.11.10",
     "axios": "^1.6.7",
-    "socket.io-client": "^4.6.1"
+    "socket.io-client": "^4.6.1",
+    "xlsx": "^0.18.5",
+    "mammoth": "^1.7.2",
+    "react-dropzone": "^14.2.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",

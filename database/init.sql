@@ -80,3 +80,21 @@ CREATE TABLE IF NOT EXISTS project_versions (
 );
 
 CREATE INDEX idx_project_versions_project_created ON project_versions(project_id, created_at);
+
+-- 文件解析记录表
+CREATE TABLE IF NOT EXISTS parse_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  file_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  file_size INTEGER NOT NULL,
+  status VARCHAR(20) DEFAULT 'uploaded',
+  result JSONB,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_parse_records_user_id ON parse_records(user_id);
+CREATE INDEX idx_parse_records_status ON parse_records(status);
+CREATE INDEX idx_parse_records_created ON parse_records(created_at);
