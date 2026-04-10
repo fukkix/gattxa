@@ -5,6 +5,7 @@ import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger } from './middleware/requestLogger.js'
 import authRoutes from './routes/auth.js'
 import projectRoutes from './routes/projects.js'
+import taskRoutes from './routes/tasks.js'
 import healthRoutes from './routes/health.js'
 
 dotenv.config()
@@ -21,6 +22,7 @@ app.use(requestLogger)
 app.use('/health', healthRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/projects', projectRoutes)
+app.use('/api/tasks', taskRoutes)
 
 // Error handling
 app.use(errorHandler)
