@@ -1,19 +1,41 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { isAuthenticated, getLocalUser, logout } from '../api/auth'
+import { getProjects, deleteProject, createProject, type Project } from '../api/projects'
+import FileUploadWithParsing from '../components/FileUploadWithParsing'
+import type { ParseResult } from '../api/upload'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const [user, setUser] = useState(getLocalUser())
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showFileUpload, setShowFileUpload] = useState(false)
 
   useEffect(() => {
     setUser(getLocalUser())
+    if (isAuthenticated()) {
+      loadProjects()
+    }
   }, [])
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true)
+      const data = await getProjects()
+      setProjects(data)
+    } catch (error) {
+      console.error('加载项目失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     logout()
     setUser(null)
+    setProjects([])
     setShowUserMenu(false)
   }
 
@@ -23,6 +45,55 @@ export default function HomePage() {
       return
     }
     navigate('/editor/new')
+  }
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm('确定要删除这个项目吗？此操作无法撤销。')) {
+      return
+    }
+
+    try {
+      await deleteProject(projectId)
+      setProjects(projects.filter(p => p.id !== projectId))
+    } catch (error) {
+      console.error('删除项目失败:', error)
+      alert('删除失败，请重试')
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
+  const handleFileUploadComplete = async (result: ParseResult) => {
+    try {
+      // 创建新项目
+      const project = await createProject({
+        name: `AI 解析项目 - ${new Date().toLocaleDateString()}`,
+        description: `从文件自动解析，包含 ${result.tasks.length} 个任务`,
+      })
+
+      // 导航到编辑器，任务数据会在 EditorPage 中处理
+      navigate(`/editor/${project.id}`, {
+        state: { parseResult: result }
+      })
+    } catch (error) {
+      console.error('创建项目失败:', error)
+      alert('创建项目失败，请重试')
+    }
+  }
+
+  const handleUploadFile = () => {
+    if (!isAuthenticated()) {
+      navigate('/login')
+      return
+    }
+    setShowFileUpload(true)
   }
 
   return (
@@ -119,7 +190,10 @@ export default function HomePage() {
               <span className="material-symbols-outlined text-[20px]">add</span>
               创建项目
             </button>
-            <button className="flex items-center gap-2 px-5 py-3 bg-surface-container-highest text-on-surface rounded-xl font-bold text-sm hover:bg-surface-container transition-all">
+            <button
+              onClick={handleUploadFile}
+              className="flex items-center gap-2 px-5 py-3 bg-surface-container-highest text-on-surface rounded-xl font-bold text-sm hover:bg-surface-container transition-all"
+            >
               <span className="material-symbols-outlined text-[20px]">upload</span>
               上传文件
             </button>
@@ -164,16 +238,65 @@ export default function HomePage() {
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-headline-md font-headline text-on-surface">我的项目</h2>
-              <button
-                onClick={handleCreateProject}
-                className="text-sm text-primary font-medium hover:underline"
-              >
-                查看全部 →
-              </button>
+              {projects.length > 0 && (
+                <button
+                  onClick={handleCreateProject}
+                  className="text-sm text-primary font-medium hover:underline"
+                >
+                  创建新项目 →
+                </button>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Empty State */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            ) : projects.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map(project => (
+                  <div
+                    key={project.id}
+                    className="bg-surface-container-lowest rounded-3xl p-6 hover:shadow-ambient transition-all group cursor-pointer border border-transparent hover:border-primary/20"
+                  >
+                    <div
+                      onClick={() => navigate(`/editor/${project.id}`)}
+                      className="flex-1"
+                    >
+                      <h3 className="font-headline font-bold text-lg text-on-surface mb-2 group-hover:text-primary transition-colors">
+                        {project.name}
+                      </h3>
+                      {project.description && (
+                        <p className="text-on-surface-variant text-sm mb-4 line-clamp-2">
+                          {project.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-on-surface-variant">
+                        <span>更新于 {formatDate(project.updatedAt)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-surface-container flex items-center justify-between">
+                      <button
+                        onClick={() => navigate(`/editor/${project.id}`)}
+                        className="text-sm text-primary font-medium hover:underline"
+                      >
+                        打开项目
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteProject(project.id)
+                        }}
+                        className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container rounded-lg transition-all"
+                        title="删除项目"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
               <div className="col-span-full p-12 bg-surface-container-low rounded-3xl text-center">
                 <div className="w-16 h-16 rounded-2xl bg-surface-container-highest mx-auto mb-4 flex items-center justify-center">
                   <span className="material-symbols-outlined text-3xl text-on-surface-variant">
@@ -193,7 +316,7 @@ export default function HomePage() {
                   创建项目
                 </button>
               </div>
-            </div>
+            )}
           </div>
         )}
       </main>
@@ -210,6 +333,14 @@ export default function HomePage() {
           创建新项目
         </span>
       </button>
+
+      {/* 文件上传对话框 */}
+      {showFileUpload && (
+        <FileUploadWithParsing
+          onClose={() => setShowFileUpload(false)}
+          onComplete={handleFileUploadComplete}
+        />
+      )}
     </div>
   )
 }

@@ -10,7 +10,7 @@ const router = Router()
 // 触发文件解析
 router.post('/', authenticate, async (req: AuthRequest, res, next) => {
   try {
-    const { fileId, fileContent } = req.body
+    const { fileId, fileContent, provider, apiKey, model } = req.body
 
     if (!fileId) {
       throw createError('缺少 fileId', 400)
@@ -18,6 +18,10 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
 
     if (!fileContent) {
       throw createError('缺少 fileContent', 400)
+    }
+
+    if (!provider || !apiKey || !model) {
+      throw createError('缺少 AI 配置参数 (provider, apiKey, model)', 400)
     }
 
     // 验证文件记录存在且属于当前用户
@@ -40,7 +44,11 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
 
     try {
       // 调用 AI 解析
-      const parseResult = await parseFileWithAI(fileContent, record.file_name)
+      const parseResult = await parseFileWithAI(fileContent, record.file_name, {
+        provider,
+        apiKey,
+        model,
+      })
 
       // 验证解析结果
       const errors = validateParseResult(parseResult)

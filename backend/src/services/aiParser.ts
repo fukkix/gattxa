@@ -1,27 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-
-// 检测使用的 API 提供商
-const API_PROVIDER = process.env.API_PROVIDER || 'anthropic' // 'anthropic' 或 'openrouter'
-const API_KEY = process.env.CLAUDE_API_KEY || process.env.OPENROUTER_API_KEY
-
-let anthropic: Anthropic
-
-if (API_PROVIDER === 'openrouter') {
-  // OpenRouter 配置
-  anthropic = new Anthropic({
-    apiKey: API_KEY,
-    baseURL: 'https://openrouter.ai/api/v1',
-    defaultHeaders: {
-      'HTTP-Referer': process.env.APP_URL || 'http://localhost:5173',
-      'X-Title': 'GanttXa',
-    },
-  })
-} else {
-  // Anthropic 官方配置
-  anthropic = new Anthropic({
-    apiKey: API_KEY,
-  })
-}
+import { createError } from '../middleware/errorHandler.js'
 
 export interface ParsedTask {
   name: string
@@ -37,6 +15,12 @@ export interface ParseResult {
   tasks: ParsedTask[]
   fieldMapping: Record<string, string>
   warnings?: string[]
+}
+
+export interface ParseOptions {
+  provider: 'anthropic' | 'openrouter'
+  apiKey: string
+  model: string
 }
 
 const PARSE_PROMPT = `你是一个项目管理文件解析专家。请分析以下文件内容，提取项目任务信息。
@@ -80,109 +64,184 @@ const PARSE_PROMPT = `你是一个项目管理文件解析专家。请分析以�
 - 任务名称：任务、工作项、活动、事项、Task、Activity
 - 开始日期：开始时间、起始日期、Start Date、Begin
 - 结束日期：结束时间、完成日期、End Date、Finish
-- 负责人：责任人、执行人、Assignee、Owner、负责方
-- 阶段：阶段、Phase、里程碑、Milestone、分组
+- 负责人：责任人、执行人、Assignee、Owner
+- 阶段：阶段、模块、Phase、Stage
 
-## 注意事项
-- 如果某个字段无法识别，confidence 设为 0
-- 如果日期格式无法解析，在 warnings 中说明
-- 保持原始数据的完整性，不要遗漏任务`
+请严格按照 JSON 格式输出，不要包含其他文字。`
 
-export const parseFileWithAI = async (
-  fileContent: string,
-  fileName: string
-): Promise<ParseResult> => {
+export async function parseFileWithAI(
+  content: string,
+  fileName: string,
+  options: ParseOptions
+): Promise<ParseResult> {
   try {
-    // 根据 API 提供商选择模型
-    const model =
-      API_PROVIDER === 'openrouter'
-        ? 'anthropic/claude-3.5-sonnet' // OpenRouter 的模型名称
-        : 'claude-sonnet-4-20250514' // Anthropic 官方模型名称
+    const { provider, apiKey, model } = options
 
-    const message = await anthropic.messages.create({
-      model,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: `${PARSE_PROMPT}\n\n## 文件名\n${fileName}\n\n## 文件内容\n${fileContent}`,
-        },
-      ],
-    })
-
-    const content = message.content[0]
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type from Claude')
+    if (!apiKey) {
+      throw createError('API Key 未提供', 400)
     }
 
-    // 提取 JSON（可能被包裹在 markdown 代码块中）
-    let jsonText = content.text.trim()
-    const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/)
-    if (jsonMatch) {
-      jsonText = jsonMatch[1]
+    // 根据提供商选择不同的 API
+    if (provider === 'openrouter') {
+      return await parseWithOpenRouter(content, fileName, apiKey, model)
+    } else {
+      return await parseWithAnthropic(content, fileName, apiKey, model)
     }
-
-    const result = JSON.parse(jsonText) as ParseResult
-
-    // 验证结果
-    if (!result.tasks || !Array.isArray(result.tasks)) {
-      throw new Error('Invalid parse result: missing tasks array')
-    }
-
-    if (!result.fieldMapping || typeof result.fieldMapping !== 'object') {
-      throw new Error('Invalid parse result: missing fieldMapping')
-    }
-
-    // 验证每个任务的必填字段
-    result.tasks.forEach((task, index) => {
-      if (!task.name) {
-        throw new Error(`Task ${index + 1}: missing name`)
-      }
-      if (!task.startDate) {
-        throw new Error(`Task ${index + 1}: missing startDate`)
-      }
-      if (task.confidence === undefined || task.confidence < 0 || task.confidence > 1) {
-        task.confidence = 0.5 // 默认置信度
-      }
-    })
-
-    return result
   } catch (error: any) {
-    console.error('AI parsing error:', error)
-    throw new Error(`AI 解析失败: ${error.message}`)
+    console.error('AI 解析失败:', error)
+    throw createError(error.message || 'AI 解析失败', 500)
   }
 }
 
-export const validateParseResult = (result: ParseResult): string[] => {
+async function parseWithAnthropic(
+  content: string,
+  fileName: string,
+  apiKey: string,
+  model: string
+): Promise<ParseResult> {
+  const anthropic = new Anthropic({
+    apiKey: apiKey,
+  })
+
+  const prompt = buildPrompt(content, fileName)
+
+  const message = await anthropic.messages.create({
+    model: model,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+  })
+
+  const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+  return parseAIResponse(responseText)
+}
+
+async function parseWithOpenRouter(
+  content: string,
+  fileName: string,
+  apiKey: string,
+  model: string
+): Promise<ParseResult> {
+  const prompt = buildPrompt(content, fileName)
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.APP_URL || 'http://localhost:5173',
+      'X-Title': 'GanttXa',
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    }),
+  })
+
+  if (!response.ok) {
+    const error: any = await response.json()
+    throw new Error(error.error?.message || 'OpenRouter API 调用失败')
+  }
+
+  const data: any = await response.json()
+  const responseText = data.choices[0]?.message?.content || ''
+  return parseAIResponse(responseText)
+}
+
+function buildPrompt(content: string, fileName: string): string {
+  return `${PARSE_PROMPT}
+
+## 文件信息
+文件名：${fileName}
+
+## 文件内容
+${content}
+
+请开始解析并返回 JSON 结果：`
+}
+
+function parseAIResponse(responseText: string): ParseResult {
+  try {
+    // 尝试提取 JSON
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('AI 响应中未找到有效的 JSON')
+    }
+
+    const result = JSON.parse(jsonMatch[0])
+
+    // 验证结果结构
+    if (!result.tasks || !Array.isArray(result.tasks)) {
+      throw new Error('AI 响应格式不正确：缺少 tasks 数组')
+    }
+
+    // 确保每个任务都有必需的字段
+    result.tasks = result.tasks.map((task: any) => ({
+      name: task.name || '未命名任务',
+      startDate: task.startDate || new Date().toISOString().split('T')[0],
+      endDate: task.endDate || null,
+      assignee: task.assignee || '',
+      phase: task.phase || '默认阶段',
+      description: task.description || '',
+      confidence: task.confidence || 0.5,
+    }))
+
+    return {
+      tasks: result.tasks,
+      fieldMapping: result.fieldMapping || {},
+      warnings: result.warnings || [],
+    }
+  } catch (error: any) {
+    console.error('解析 AI 响应失败:', error)
+    throw new Error(`解析 AI 响应失败: ${error.message}`)
+  }
+}
+
+// 验证解析结果
+export function validateParseResult(result: ParseResult): string[] {
   const errors: string[] = []
 
-  if (result.tasks.length === 0) {
-    errors.push('未识别到任何任务')
+  if (!result.tasks || result.tasks.length === 0) {
+    errors.push('未找到任何任务')
   }
 
   result.tasks.forEach((task, index) => {
-    if (!task.name || task.name.trim().length === 0) {
+    if (!task.name || task.name.trim() === '') {
       errors.push(`任务 ${index + 1}: 缺少任务名称`)
     }
 
-    if (!task.startDate || !/^\d{4}-\d{2}-\d{2}$/.test(task.startDate)) {
-      errors.push(`任务 ${index + 1}: 开始日期格式错误`)
+    if (!task.startDate) {
+      errors.push(`任务 ${index + 1} (${task.name}): 缺少开始日期`)
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(task.startDate)) {
+      errors.push(`任务 ${index + 1} (${task.name}): 开始日期格式不正确`)
     }
 
     if (task.endDate && !/^\d{4}-\d{2}-\d{2}$/.test(task.endDate)) {
-      errors.push(`任务 ${index + 1}: 结束日期格式错误`)
+      errors.push(`任务 ${index + 1} (${task.name}): 结束日期格式不正确`)
     }
 
-    if (task.confidence < 0.5) {
-      errors.push(`任务 ${index + 1}: 置信度过低 (${task.confidence})，建议人工检查`)
+    if (task.confidence < 0.3) {
+      errors.push(`任务 ${index + 1} (${task.name}): 置信度过低 (${task.confidence})`)
     }
   })
 
   return errors
 }
 
-export const calculateAccuracy = (result: ParseResult): number => {
-  if (result.tasks.length === 0) return 0
+// 计算准确率
+export function calculateAccuracy(result: ParseResult): number {
+  if (!result.tasks || result.tasks.length === 0) {
+    return 0
+  }
 
   const totalConfidence = result.tasks.reduce((sum, task) => sum + task.confidence, 0)
   return totalConfidence / result.tasks.length

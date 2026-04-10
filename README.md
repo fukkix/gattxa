@@ -6,6 +6,8 @@
 
 在线甘特图协作工具 - 支持 AI 智能解析项目文件
 
+> **重要更新**：AI 文件解析功能现在需要用户自行配置 API Key，确保数据隐私和安全。详见 [AI 配置指南](docs/OPENROUTER-SETUP.md)。
+
 ## ✨ 项目简介
 
 GanttXa 是一款面向项目管理者和团队协作者的在线甘特图生成与分享工具。通过 AI 技术降低项目可视化门槛，让项目管理更简单高效。
@@ -50,6 +52,22 @@ GanttXa 是一款面向项目管理者和团队协作者的在线甘特图生成
 - Docker & Docker Compose
 - PostgreSQL 14+
 - Redis 7+
+
+### AI 配置（可选）
+
+如果需要使用 AI 文件解析功能，您需要：
+
+1. 获取 API Key（选择其一）：
+   - [OpenRouter](https://openrouter.ai/keys)（推荐，价格更优惠）
+   - [Anthropic 官方](https://console.anthropic.com/settings/keys)
+
+2. 在应用中配置：
+   - 点击"上传文件"按钮
+   - 点击"AI 设置"
+   - 输入您的 API Key 和选择模型
+   - API Key 仅存储在浏览器本地，不会上传到服务器
+
+详细配置指南：[docs/OPENROUTER-SETUP.md](docs/OPENROUTER-SETUP.md)
 
 ### 开发环境启动
 

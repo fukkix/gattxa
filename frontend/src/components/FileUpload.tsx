@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
+import AISettingsDialog, { hasAISettings } from './AISettingsDialog'
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void
@@ -8,6 +9,7 @@ interface FileUploadProps {
 
 export default function FileUpload({ onFileSelect, onClose }: FileUploadProps) {
   const [error, setError] = useState<string | null>(null)
+  const [showAISettings, setShowAISettings] = useState(false)
 
   const onDrop = useCallback(
     (acceptedFiles: File[], rejectedFiles: any[]) => {
@@ -26,6 +28,12 @@ export default function FileUpload({ onFileSelect, onClose }: FileUploadProps) {
       }
 
       if (acceptedFiles.length > 0) {
+        // 检查是否已配置 AI
+        if (!hasAISettings()) {
+          setError('请先配置 AI 设置')
+          setShowAISettings(true)
+          return
+        }
         onFileSelect(acceptedFiles[0])
       }
     },
@@ -138,7 +146,36 @@ export default function FileUpload({ onFileSelect, onClose }: FileUploadProps) {
           </ul>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        {!hasAISettings() && (
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-amber-600">warning</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-900 mb-2">
+                  需要配置 AI 设置
+                </p>
+                <p className="text-sm text-amber-800 mb-3">
+                  AI 文件解析功能需要您提供自己的 API Key。您的 Key 仅存储在本地浏览器中。
+                </p>
+                <button
+                  onClick={() => setShowAISettings(true)}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-medium hover:bg-amber-700 transition-all"
+                >
+                  配置 AI 设置
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-between items-center">
+          <button
+            onClick={() => setShowAISettings(true)}
+            className="px-4 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-xl transition-all flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[20px]">settings</span>
+            AI 设置
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition"
@@ -147,6 +184,17 @@ export default function FileUpload({ onFileSelect, onClose }: FileUploadProps) {
           </button>
         </div>
       </div>
+
+      {/* AI Settings Dialog */}
+      {showAISettings && (
+        <AISettingsDialog
+          onClose={() => setShowAISettings(false)}
+          onSave={() => {
+            setError(null)
+            setShowAISettings(false)
+          }}
+        />
+      )}
     </div>
   )
 }

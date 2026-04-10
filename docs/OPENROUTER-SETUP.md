@@ -1,174 +1,120 @@
-# 使用 OpenRouter API 配置指南
+# AI 文件解析配置指南
 
-GanttXa 支持使用 OpenRouter 作为 AI API 提供商，这样你可以使用一个 API Key 访问多个 AI 模型。
+GanttXa 的 AI 文件解析功能支持用户自行配置 API Key，确保数据隐私和安全。
 
-## 为什么使用 OpenRouter？
+## 支持的 AI 提供商
 
-- 💰 **更便宜**：通常比官方 API 更便宜
-- 🔄 **多模型支持**：一个 API Key 访问多个模型
-- 🌍 **更好的可用性**：在某些地区更容易访问
-- 📊 **统一计费**：所有模型使用统一计费
+### 1. Anthropic 官方 API
+
+直接使用 Claude 官方 API。
+
+- 官网：https://www.anthropic.com/
+- 获取 API Key：https://console.anthropic.com/settings/keys
+- 支持模型：
+  - `claude-3-5-sonnet-20241022` (推荐)
+  - `claude-3-5-haiku-20241022`
+  - `claude-3-opus-20240229`
+
+### 2. OpenRouter (推荐)
+
+通过 OpenRouter 访问多个 AI 模型，价格更优惠。
+
+- 官网：https://openrouter.ai/
+- 获取 API Key：https://openrouter.ai/keys
+- 支持模型：
+  - `anthropic/claude-3.5-sonnet` (推荐)
+  - `anthropic/claude-3-haiku`
+  - `anthropic/claude-3-opus`
+  - `openai/gpt-4-turbo`
+  - `google/gemini-pro-1.5`
 
 ## 配置步骤
 
-### 1. 获取 OpenRouter API Key
+### 步骤 1：获取 API Key
 
-1. 访问 https://openrouter.ai/
-2. 注册/登录账户
-3. 进入 Keys 页面：https://openrouter.ai/keys
-4. 创建新的 API Key
-5. 复制 API Key（格式：`sk-or-v1-xxxxx`）
+1. 访问对应提供商的官网
+2. 注册账号并登录
+3. 在设置页面创建新的 API Key
+4. 复制 API Key（注意保密）
 
-### 2. 配置后端环境变量
+### 步骤 2：在 GanttXa 中配置
 
-编辑 `backend/.env` 文件：
+1. 点击"上传文件"按钮
+2. 在文件上传对话框中，点击"AI 设置"按钮
+3. 选择 API 提供商（Anthropic 或 OpenRouter）
+4. 粘贴你的 API Key
+5. 选择要使用的模型
+6. 点击"保存设置"
 
-```env
-# 设置 API 提供商为 openrouter
-API_PROVIDER=openrouter
+### 步骤 3：上传文件解析
 
-# 填写你的 OpenRouter API Key
-OPENROUTER_API_KEY=sk-or-v1-xxxxx
+配置完成后，即可上传 Excel、Word 或 CSV 文件进行 AI 解析。
 
-# 应用 URL（OpenRouter 需要用于统计）
-APP_URL=http://localhost:5173
+## 数据隐私说明
 
-# 其他配置保持不变
-DATABASE_URL=postgresql://postgres:password@localhost:5432/ganttxa
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-secret-key
-PORT=3000
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
-UPLOAD_DIR=./uploads
-MAX_FILE_SIZE=20971520
-```
+- API Key 仅存储在您的浏览器本地存储中
+- 不会上传到 GanttXa 服务器
+- 文件解析时，前端直接调用 AI API
+- 您可以随时清除本地存储的 API Key
 
-### 3. 重启后端服务
+## 费用说明
 
-```powershell
-# 停止当前运行的后端（Ctrl+C）
-# 然后重新启动
-npm run dev
-```
+### Anthropic 官方定价
 
-## 可用的模型
+- Claude 3.5 Sonnet: $3/M tokens (输入), $15/M tokens (输出)
+- Claude 3 Haiku: $0.25/M tokens (输入), $1.25/M tokens (输出)
 
-OpenRouter 支持多个 Claude 模型，当前配置使用：
+### OpenRouter 定价
 
-- **anthropic/claude-3.5-sonnet**（推荐）
-  - 最新的 Claude 3.5 Sonnet 模型
-  - 性能优秀，价格合理
-  - 适合文件解析任务
+- 价格通常比官方便宜 10-30%
+- 详细价格：https://openrouter.ai/models
 
-### 切换模型
+### 预估成本
 
-如果你想使用其他模型，编辑 `backend/src/services/aiParser.ts`：
+一个典型的项目文件（50 个任务）：
+- 输入：约 2,000 tokens
+- 输出：约 1,500 tokens
+- 使用 Claude 3.5 Sonnet：约 $0.03/次
+- 使用 Claude 3 Haiku：约 $0.002/次
 
-```typescript
-const model =
-  API_PROVIDER === 'openrouter'
-    ? 'anthropic/claude-3.5-sonnet'  // 修改这里
-    : 'claude-sonnet-4-20250514'
-```
+## 常见问题
 
-可选模型：
-- `anthropic/claude-3.5-sonnet` - Claude 3.5 Sonnet（推荐）
-- `anthropic/claude-3-opus` - Claude 3 Opus（最强但最贵）
-- `anthropic/claude-3-sonnet` - Claude 3 Sonnet
-- `anthropic/claude-3-haiku` - Claude 3 Haiku（最快最便宜）
+### Q: 为什么要用户自己提供 API Key？
 
-查看所有可用模型：https://openrouter.ai/models
+A: 这样可以：
+1. 保护用户数据隐私（API Key 不经过我们的服务器）
+2. 让用户自主控制 AI 使用成本
+3. 避免服务商限制和配额问题
 
-## 价格对比
+### Q: API Key 安全吗？
 
-以 Claude 3.5 Sonnet 为例（2026年4月价格）：
+A: API Key 仅存储在您的浏览器本地存储中，不会上传到任何服务器。建议：
+- 定期更换 API Key
+- 不要在公共电脑上保存 API Key
+- 使用完毕后可以清除设置
 
-| 提供商 | 输入价格 | 输出价格 |
-|--------|----------|----------|
-| Anthropic 官方 | $3/1M tokens | $15/1M tokens |
-| OpenRouter | $3/1M tokens | $15/1M tokens |
+### Q: 支持其他 AI 模型吗？
 
-*价格可能变动，请查看官方网站*
+A: 目前支持 Anthropic Claude 系列和通过 OpenRouter 访问的其他模型。未来会添加更多提供商支持。
 
-## 测试配置
+### Q: 解析失败怎么办？
 
-启动后端后，访问健康检查端点：
+A: 请检查：
+1. API Key 是否正确
+2. 账户余额是否充足
+3. 文件格式是否符合要求
+4. 网络连接是否正常
 
-```powershell
-curl http://localhost:3000/health
-```
+## 推荐配置
 
-然后尝试上传文件进行 AI 解析，检查是否正常工作。
+对于大多数用户，我们推荐：
 
-## 故障排除
+- 提供商：OpenRouter
+- 模型：`anthropic/claude-3.5-sonnet`
+- 原因：性价比高，解析准确度好
 
-### 1. API Key 无效
+对于预算有限的用户：
 
-**错误：** `Invalid API key`
-
-**解决：**
-- 检查 API Key 是否正确复制
-- 确认 API Key 格式为 `sk-or-v1-xxxxx`
-- 检查 OpenRouter 账户是否有余额
-
-### 2. 模型不可用
-
-**错误：** `Model not found`
-
-**解决：**
-- 检查模型名称是否正确
-- 访问 https://openrouter.ai/models 查看可用模型
-- 某些模型可能需要额外权限
-
-### 3. 请求失败
-
-**错误：** `Request failed`
-
-**解决：**
-- 检查网络连接
-- 确认 OpenRouter 服务状态：https://status.openrouter.ai/
-- 查看后端日志获取详细错误信息
-
-### 4. 余额不足
-
-**错误：** `Insufficient credits`
-
-**解决：**
-- 访问 https://openrouter.ai/credits 充值
-- OpenRouter 支持多种支付方式
-
-## 切换回 Anthropic 官方 API
-
-如果你想切换回 Anthropic 官方 API：
-
-1. 编辑 `backend/.env`：
-```env
-API_PROVIDER=anthropic
-CLAUDE_API_KEY=sk-ant-api03-xxxxx
-```
-
-2. 重启后端服务
-
-## 监控使用情况
-
-OpenRouter 提供详细的使用统计：
-
-1. 访问 https://openrouter.ai/activity
-2. 查看每个请求的详细信息
-3. 监控成本和使用量
-
-## 最佳实践
-
-1. **设置预算限制**：在 OpenRouter 设置每日/每月预算
-2. **监控使用**：定期检查 API 使用情况
-3. **选择合适的模型**：根据任务复杂度选择模型
-4. **缓存结果**：对于相同的文件，可以缓存解析结果
-
-## 参考链接
-
-- OpenRouter 官网：https://openrouter.ai/
-- OpenRouter 文档：https://openrouter.ai/docs
-- 模型列表：https://openrouter.ai/models
-- 价格对比：https://openrouter.ai/models?order=newest
-- API 参考：https://openrouter.ai/docs#api-keys
+- 提供商：OpenRouter
+- 模型：`anthropic/claude-3-haiku`
+- 原因：价格便宜，速度快，准确度尚可

@@ -60,11 +60,24 @@ export const uploadFile = async (file: File): Promise<UploadResponse> => {
   return response.data.data
 }
 
+export interface AISettings {
+  provider: 'anthropic' | 'openrouter'
+  apiKey: string
+  model: string
+}
+
 // 触发文件解析
-export const parseFile = async (fileId: string, fileContent: string): Promise<ParseResponse> => {
+export const parseFile = async (
+  fileId: string,
+  fileContent: string,
+  aiSettings: AISettings
+): Promise<ParseResponse> => {
   const response = await api.post('/api/parse', {
     fileId,
     fileContent,
+    provider: aiSettings.provider,
+    apiKey: aiSettings.apiKey,
+    model: aiSettings.model,
   })
 
   return response.data.data

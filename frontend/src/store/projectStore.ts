@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Task, Project, GanttConfig } from '../types'
+import { updateProject as apiUpdateProject } from '../api/projects'
 
 interface ProjectState {
   currentProject: Project | null
@@ -17,9 +18,10 @@ interface ProjectState {
   updateGanttConfig: (config: Partial<GanttConfig>) => void
   setSaving: (saving: boolean) => void
   setLastSaved: (date: Date) => void
+  saveProject: () => Promise<void>
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useProjectStore = create<ProjectState>((set, get) => ({
   currentProject: null,
   tasks: [],
   ganttConfig: {
@@ -40,16 +42,51 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   setProject: (project) => set({ currentProject: project, tasks: project.tasks || [] }),
   
-  addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
+  addTask: (task) => set((state) => {
+    const updatedTasks = [...state.tasks, task]
+    if (state.currentProject) {
+      return {
+        tasks: updatedTasks,
+        currentProject: { ...state.currentProject, tasks: updatedTasks }
+      }
+    }
+    return { tasks: updatedTasks }
+  }),
   
   updateTask: (id, updates) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) => (task.id === id ? { ...task, ...updates } : task)),
-    })),
+    set((state) => {
+      const updatedTasks = state.tasks.map((task) => 
+        task.id === id ? { ...task, ...updates } : task
+      )
+      if (state.currentProject) {
+        return {
+          tasks: updatedTasks,
+          currentProject: { ...state.currentProject, tasks: updatedTasks }
+        }
+      }
+      return { tasks: updatedTasks }
+    }),
   
-  deleteTask: (id) => set((state) => ({ tasks: state.tasks.filter((task) => task.id !== id) })),
+  deleteTask: (id) => set((state) => {
+    const updatedTasks = state.tasks.filter((task) => task.id !== id)
+    if (state.currentProject) {
+      return {
+        tasks: updatedTasks,
+        currentProject: { ...state.currentProject, tasks: updatedTasks }
+      }
+    }
+    return { tasks: updatedTasks }
+  }),
   
-  setTasks: (tasks) => set({ tasks }),
+  setTasks: (tasks) => set((state) => {
+    if (state.currentProject) {
+      return {
+        tasks,
+        currentProject: { ...state.currentProject, tasks }
+      }
+    }
+    return { tasks }
+  }),
   
   updateGanttConfig: (config) =>
     set((state) => ({ ganttConfig: { ...state.ganttConfig, ...config } })),
@@ -57,4 +94,28 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setSaving: (saving) => set({ isSaving: saving }),
   
   setLastSaved: (date) => set({ lastSaved: date }),
+
+  saveProject: async () => {
+    const state = get()
+    const { currentProject, tasks } = state
+
+    if (!currentProject || currentProject.id.startsWith('temp_')) {
+      throw new Error('无法保存临时项目，请先创建项目')
+    }
+
+    try {
+      set({ isSaving: true })
+
+      await apiUpdateProject(currentProject.id, {
+        name: currentProject.name,
+        description: currentProject.description,
+        tasks,
+      })
+
+      set({ lastSaved: new Date(), isSaving: false })
+    } catch (error) {
+      set({ isSaving: false })
+      throw error
+    }
+  },
 }))
