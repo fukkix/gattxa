@@ -24,11 +24,28 @@ export default function EditorPage() {
   const [showFileUpload, setShowFileUpload] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [projectName, setProjectName] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     loadProject()
   }, [id])
+
+  // 自动保存机制（30秒防抖）
+  useEffect(() => {
+    if (!currentProject || currentProject.id.startsWith('temp_')) {
+      return
+    }
+
+    const autoSaveTimer = setTimeout(() => {
+      saveProject().catch(err => {
+        console.error('自动保存失败:', err)
+      })
+    }, 30000) // 30秒后自动保存
+
+    return () => clearTimeout(autoSaveTimer)
+  }, [currentProject, saveProject])
 
   const loadProject = async () => {
     if (!isAuthenticated()) {
@@ -42,7 +59,7 @@ export default function EditorPage() {
 
       if (id === 'new') {
         // 创建新项目
-        setProject({
+        const newProject = {
           id: `temp_${Date.now()}`,
           userId: 'temp_user',
           name: '未命名项目',
@@ -50,11 +67,14 @@ export default function EditorPage() {
           tasks: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        })
+        }
+        setProject(newProject)
+        setProjectName(newProject.name)
       } else if (id) {
         // 加载现有项目
         const project = await getProject(id)
         setProject(project)
+        setProjectName(project.name)
       }
     } catch (err: any) {
       console.error('加载项目失败:', err)
@@ -62,6 +82,34 @@ export default function EditorPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleNameEdit = () => {
+    setEditingName(true)
+  }
+
+  const handleNameSave = async () => {
+    if (!currentProject || !projectName.trim()) {
+      setEditingName(false)
+      return
+    }
+
+    try {
+      setProject({ ...currentProject, name: projectName.trim() })
+      setEditingName(false)
+
+      // 如果不是临时项目，立即保存
+      if (!currentProject.id.startsWith('temp_')) {
+        await saveProject()
+      }
+    } catch (err) {
+      console.error('保存项目名称失败:', err)
+    }
+  }
+
+  const handleNameCancel = () => {
+    setProjectName(currentProject?.name || '')
+    setEditingName(false)
   }
 
   const handleNewTask = () => {
@@ -194,9 +242,48 @@ export default function EditorPage() {
                 <span className="material-symbols-outlined">arrow_back</span>
               </button>
               <div>
-                <h1 className="text-headline-sm font-headline text-on-surface">
-                  {currentProject.name}
-                </h1>
+                {editingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleNameSave()
+                        if (e.key === 'Escape') handleNameCancel()
+                      }}
+                      className="px-3 py-1 bg-surface-container-highest text-on-surface rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-headline-sm font-headline"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleNameSave}
+                      className="p-1 text-primary hover:bg-surface-container rounded-lg transition-colors"
+                      title="保存"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">check</span>
+                    </button>
+                    <button
+                      onClick={handleNameCancel}
+                      className="p-1 text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors"
+                      title="取消"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">close</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 group">
+                    <h1 className="text-headline-sm font-headline text-on-surface">
+                      {currentProject.name}
+                    </h1>
+                    <button
+                      onClick={handleNameEdit}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-all"
+                      title="编辑项目名称"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                  </div>
+                )}
                 {lastSaved && (
                   <p className="text-label-sm text-on-surface-variant">
                     {isSaving ? '保存中...' : `上次保存: ${lastSaved.toLocaleTimeString()}`}
