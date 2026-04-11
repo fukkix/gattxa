@@ -16,10 +16,8 @@ export default function GanttControls() {
   }
 
   const handleTodayClick = () => {
-    // TODO: 实现跳转到今天的逻辑
-    const today = new Date()
-    console.log('跳转到今天:', today)
-    // 这里需要触发甘特图滚动到今天的位置
+    // 触发自定义事件，让 GanttChart 组件处理滚动
+    window.dispatchEvent(new CustomEvent('scrollToToday'))
   }
 
   return (

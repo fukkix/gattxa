@@ -40,6 +40,47 @@ const GanttChart = forwardRef<HTMLCanvasElement>((_props, ref) => {
     renderGantt()
   }, [tasks, ganttConfig])
 
+  // 监听滚动到今天的事件
+  useEffect(() => {
+    const handleScrollToToday = () => {
+      const container = containerRef.current
+      if (!container || tasks.length === 0) return
+
+      // 计算今天的位置
+      const dates = tasks.flatMap(t => [
+        dayjs(t.startDate),
+        t.endDate ? dayjs(t.endDate) : dayjs(t.startDate).add(7, 'day')
+      ])
+      const minDate = dayjs.min(dates)!.subtract(3, 'day')
+      const today = dayjs()
+      const todayDay = today.diff(minDate, 'day')
+      
+      if (todayDay >= 0) {
+        const PHASE_WIDTH = 24
+        const TASK_WIDTH = 200
+        const ASSIGNEE_WIDTH = 100
+        const LEFT_WIDTH = PHASE_WIDTH + TASK_WIDTH + ASSIGNEE_WIDTH
+        
+        const rect = container.getBoundingClientRect()
+        const timelineWidth = rect.width - LEFT_WIDTH
+        const totalDays = dayjs.max(dates)!.add(7, 'day').diff(minDate, 'day') + 1
+        const dayWidth = timelineWidth / totalDays
+        
+        // 滚动到今天的位置（居中显示）
+        const todayX = LEFT_WIDTH + todayDay * dayWidth
+        const scrollX = todayX - rect.width / 2
+        
+        container.scrollTo({
+          left: Math.max(0, scrollX),
+          behavior: 'smooth'
+        })
+      }
+    }
+
+    window.addEventListener('scrollToToday', handleScrollToToday)
+    return () => window.removeEventListener('scrollToToday', handleScrollToToday)
+  }, [tasks])
+
   const renderGantt = () => {
     const canvas = canvasRef.current
     const container = containerRef.current
