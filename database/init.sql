@@ -62,13 +62,18 @@ CREATE INDEX idx_share_links_project_id ON share_links(project_id);
 CREATE TABLE IF NOT EXISTS comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
-  mentions JSONB DEFAULT '[]',
-  created_at TIMESTAMP DEFAULT NOW()
+  mentions TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT comments_content_not_empty CHECK (length(trim(content)) > 0)
 );
 
-CREATE INDEX idx_comments_task_id ON comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_mentions ON comments USING GIN(mentions);
 
 -- 版本历史表
 CREATE TABLE IF NOT EXISTS project_versions (

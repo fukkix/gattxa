@@ -13,16 +13,21 @@ export interface AISettings {
 
 const MODELS = {
   anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (推荐)' },
-    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (2025-05-14) 推荐' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (2024-10-22)' },
+    { value: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet (2024-06-20)' },
     { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (快速)' },
   ],
   openrouter: [
-    { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4 (推荐)' },
+    { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4 (最新) 推荐' },
+    { value: 'anthropic/claude-3.5-sonnet:beta', label: 'Claude 3.5 Sonnet (Beta)' },
     { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
     { value: 'anthropic/claude-3-opus', label: 'Claude 3 Opus' },
     { value: 'anthropic/claude-3-sonnet', label: 'Claude 3 Sonnet' },
     { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (快速)' },
+    { value: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (免费)' },
+    { value: 'google/gemini-pro-1.5', label: 'Gemini 1.5 Pro' },
   ],
 }
 

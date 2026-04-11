@@ -171,29 +171,50 @@ ${content}
 
 function parseAIResponse(responseText: string): ParseResult {
   try {
+    console.log('🔍 [DEBUG] AI 原始响应长度:', responseText.length)
+    console.log('🔍 [DEBUG] AI 原始响应预览:', responseText.substring(0, 500))
+    
     // 尝试提取 JSON
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
+      console.error('❌ [DEBUG] 未找到 JSON 格式')
       throw new Error('AI 响应中未找到有效的 JSON')
     }
 
+    console.log('🔍 [DEBUG] 提取的 JSON:', jsonMatch[0].substring(0, 500))
     const result = JSON.parse(jsonMatch[0])
+
+    console.log('🔍 [DEBUG] 解析后的对象:', {
+      hasTasks: !!result.tasks,
+      tasksLength: result.tasks?.length || 0,
+      hasFieldMapping: !!result.fieldMapping,
+    })
 
     // 验证结果结构
     if (!result.tasks || !Array.isArray(result.tasks)) {
+      console.error('❌ [DEBUG] tasks 不是数组')
       throw new Error('AI 响应格式不正确：缺少 tasks 数组')
     }
 
+    if (result.tasks.length === 0) {
+      console.warn('⚠️ [DEBUG] tasks 数组为空')
+    }
+
     // 确保每个任务都有必需的字段
-    result.tasks = result.tasks.map((task: any) => ({
-      name: task.name || '未命名任务',
-      startDate: task.startDate || new Date().toISOString().split('T')[0],
-      endDate: task.endDate || null,
-      assignee: task.assignee || '',
-      phase: task.phase || '默认阶段',
-      description: task.description || '',
-      confidence: task.confidence || 0.5,
-    }))
+    result.tasks = result.tasks.map((task: any, index: number) => {
+      console.log(`🔍 [DEBUG] 任务 ${index + 1}:`, task.name)
+      return {
+        name: task.name || '未命名任务',
+        startDate: task.startDate || new Date().toISOString().split('T')[0],
+        endDate: task.endDate || null,
+        assignee: task.assignee || '',
+        phase: task.phase || '默认阶段',
+        description: task.description || '',
+        confidence: task.confidence || 0.5,
+      }
+    })
+
+    console.log('✅ [DEBUG] 解析成功，任务数量:', result.tasks.length)
 
     return {
       tasks: result.tasks,
@@ -201,7 +222,7 @@ function parseAIResponse(responseText: string): ParseResult {
       warnings: result.warnings || [],
     }
   } catch (error: any) {
-    console.error('解析 AI 响应失败:', error)
+    console.error('❌ [DEBUG] 解析 AI 响应失败:', error)
     throw new Error(`解析 AI 响应失败: ${error.message}`)
   }
 }

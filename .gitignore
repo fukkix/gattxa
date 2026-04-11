@@ -54,3 +54,12 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Uploads
+backend/uploads/
+uploads/
+*.xlsx
+*.xls
+*.docx
+*.doc
+*.csv

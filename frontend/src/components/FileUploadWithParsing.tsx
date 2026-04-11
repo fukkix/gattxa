@@ -36,15 +36,21 @@ export default function FileUploadWithParsing({
 
     try {
       // 1. 读取文件内容
+      console.log('🔍 [DEBUG] 开始读取文件:', file.name)
       const fileContent = await readFileContent(file)
+      console.log('🔍 [DEBUG] 文件内容长度:', fileContent.length)
+      console.log('🔍 [DEBUG] 文件内容预览:', fileContent.substring(0, 200))
       setProgress(30)
 
       // 2. 上传文件
+      console.log('🔍 [DEBUG] 开始上传文件')
       const uploadResult = await uploadFile(file)
+      console.log('🔍 [DEBUG] 上传结果:', uploadResult)
       setProgress(50)
 
       // 3. 获取 AI 设置
       const aiSettings = getAISettings()
+      console.log('🔍 [DEBUG] AI 设置:', aiSettings)
       if (!aiSettings) {
         throw new Error('未配置 AI 设置')
       }
@@ -52,22 +58,28 @@ export default function FileUploadWithParsing({
       // 4. 调用 AI 解析
       setParsingStatus('processing')
       setProgress(60)
+      console.log('🔍 [DEBUG] 开始 AI 解析')
 
       const result = await parseFile(uploadResult.id, fileContent, aiSettings)
+      console.log('✅ 解析成功! 任务数量:', result.result?.tasks?.length || 0)
+      
       setProgress(100)
-
-      // 5. 解析完成
       setParsingStatus('completed')
-      setParseResult(result.result || null)
+      
+      const parsedResult = result.result || null
+      setParseResult(parsedResult)
 
-      // 延迟跳转到字段映射
+      if (!parsedResult || !parsedResult.tasks || parsedResult.tasks.length === 0) {
+        throw new Error('AI 解析未返回任何任务')
+      }
+
+      // 立即跳转到字段映射（不延迟）
+      console.log('✅ 跳转到字段映射界面...')
       setTimeout(() => {
-        if (result.result) {
-          setStep('mapping')
-        }
-      }, 1500)
+        setStep('mapping')
+      }, 500) // 缩短延迟到 0.5 秒
     } catch (err: any) {
-      console.error('文件解析失败:', err)
+      console.error('❌ [DEBUG] 文件解析失败:', err)
       setParsingStatus('failed')
       setError(err.message || '文件解析失败，请重试')
     }

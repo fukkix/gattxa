@@ -12,6 +12,13 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const { fileId, fileContent, provider, apiKey, model } = req.body
 
+    console.log('🔍 [DEBUG] 收到解析请求')
+    console.log('🔍 [DEBUG] fileId:', fileId)
+    console.log('🔍 [DEBUG] fileContent 长度:', fileContent?.length || 0)
+    console.log('🔍 [DEBUG] provider:', provider)
+    console.log('🔍 [DEBUG] model:', model)
+    console.log('🔍 [DEBUG] apiKey 长度:', apiKey?.length || 0)
+
     if (!fileId) {
       throw createError('缺少 fileId', 400)
     }
@@ -35,6 +42,7 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
     }
 
     const record = recordResult.rows[0]
+    console.log('🔍 [DEBUG] 文件记录:', record.file_name)
 
     // 更新状态为解析中
     await query('UPDATE parse_records SET status = $1, updated_at = NOW() WHERE id = $2', [
@@ -44,15 +52,23 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
 
     try {
       // 调用 AI 解析
+      console.log('🔍 [DEBUG] 开始调用 AI 解析')
       const parseResult = await parseFileWithAI(fileContent, record.file_name, {
         provider,
         apiKey,
         model,
       })
 
+      console.log('🔍 [DEBUG] AI 解析完成')
+      console.log('🔍 [DEBUG] 任务数量:', parseResult.tasks?.length || 0)
+      console.log('🔍 [DEBUG] 字段映射:', parseResult.fieldMapping)
+
       // 验证解析结果
       const errors = validateParseResult(parseResult)
       const accuracy = calculateAccuracy(parseResult)
+
+      console.log('🔍 [DEBUG] 准确率:', accuracy)
+      console.log('🔍 [DEBUG] 错误数量:', errors.length)
 
       // 保存解析结果
       await query(
@@ -61,6 +77,8 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
          WHERE id = $3`,
         ['completed', JSON.stringify(parseResult), fileId]
       )
+
+      console.log('✅ [DEBUG] 解析成功，返回结果')
 
       res.json({
         success: true,
@@ -73,6 +91,7 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
         },
       })
     } catch (parseError: any) {
+      console.error('❌ [DEBUG] AI 解析失败:', parseError)
       // 解析失败，更新状态
       await query(
         'UPDATE parse_records SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3',
@@ -82,6 +101,7 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
       throw createError(`解析失败: ${parseError.message}`, 500)
     }
   } catch (error) {
+    console.error('❌ [DEBUG] 请求处理失败:', error)
     next(error)
   }
 })

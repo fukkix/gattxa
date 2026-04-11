@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { exportToPNG, exportToCSV, exportToJSON } from '../utils/exportUtils'
+import { exportToPNG, exportToCSV, exportToJSON, exportToPDF } from '../utils/exportUtils'
 import { useProjectStore } from '../store/projectStore'
 
 interface ExportDialogProps {
@@ -10,7 +10,7 @@ interface ExportDialogProps {
 export default function ExportDialog({ canvasRef, onClose }: ExportDialogProps) {
   const { currentProject, tasks } = useProjectStore()
   const [exporting, setExporting] = useState(false)
-  const [exportType, setExportType] = useState<'png' | 'csv' | 'json'>('png')
+  const [exportType, setExportType] = useState<'png' | 'pdf' | 'csv' | 'json'>('png')
 
   const handleExport = async () => {
     if (!currentProject) return
@@ -24,6 +24,11 @@ export default function ExportDialog({ canvasRef, onClose }: ExportDialogProps) 
         case 'png':
           if (canvasRef.current) {
             await exportToPNG(canvasRef.current, `${projectName}_甘特图_${timestamp}.png`)
+          }
+          break
+        case 'pdf':
+          if (canvasRef.current) {
+            await exportToPDF(currentProject.name, tasks, canvasRef.current, `${projectName}_${timestamp}.pdf`)
           }
           break
         case 'csv':
@@ -86,6 +91,27 @@ export default function ExportDialog({ canvasRef, onClose }: ExportDialogProps) 
                 </div>
                 <p className="text-sm text-gray-500 mt-1">
                   导出高清甘特图图片（2x 分辨率），适合打印和分享
+                </p>
+              </div>
+            </label>
+
+            {/* PDF 选项 */}
+            <label className="flex items-start p-4 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="radio"
+                name="exportType"
+                value="pdf"
+                checked={exportType === 'pdf'}
+                onChange={e => setExportType(e.target.value as any)}
+                className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+              />
+              <div className="ml-3 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">📑</span>
+                  <span className="font-medium text-gray-900">PDF 文档</span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  导出完整 PDF 文档，包含甘特图和任务列表
                 </p>
               </div>
             </label>

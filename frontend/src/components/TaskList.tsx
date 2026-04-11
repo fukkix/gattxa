@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { Task } from '../types'
 import { groupTasksByPhase } from '../utils/ganttRenderer'
+import CommentSection from './CommentSection'
 
 interface TaskListProps {
   onEditTask: (task: Task) => void
@@ -13,6 +14,7 @@ export default function TaskList({ onEditTask }: TaskListProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [draggedTask, setDraggedTask] = useState<string | null>(null)
   const [dragOverTask, setDragOverTask] = useState<string | null>(null)
+  const [commentingTask, setCommentingTask] = useState<Task | null>(null)
 
   const groupedTasks = groupTasksByPhase(tasks)
 
@@ -191,6 +193,13 @@ export default function TaskList({ onEditTask }: TaskListProps) {
                         {/* 操作按钮 */}
                         <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            onClick={() => setCommentingTask(task)}
+                            className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary-container rounded-lg transition-all"
+                            title="评论"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">comment</span>
+                          </button>
+                          <button
                             onClick={() => onEditTask(task)}
                             className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary-container rounded-lg transition-all"
                             title="编辑"
@@ -237,6 +246,14 @@ export default function TaskList({ onEditTask }: TaskListProps) {
           </div>
         )
       })}
+
+      {/* 评论对话框 */}
+      {commentingTask && (
+        <CommentSection
+          task={commentingTask}
+          onClose={() => setCommentingTask(null)}
+        />
+      )}
     </div>
   )
 }

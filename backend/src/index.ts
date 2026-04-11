@@ -10,6 +10,7 @@ import uploadRoutes from './routes/upload.js'
 import parseRoutes from './routes/parse.js'
 import healthRoutes from './routes/health.js'
 import shareRoutes from './routes/share.js'
+import commentRoutes from './routes/comments.js'
 
 dotenv.config()
 
@@ -29,6 +30,7 @@ app.use('/api/tasks', taskRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/parse', parseRoutes)
 app.use('/api', shareRoutes)
+app.use('/api', commentRoutes)
 
 // Error handling
 app.use(errorHandler)
