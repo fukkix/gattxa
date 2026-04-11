@@ -2,8 +2,13 @@ import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import dayjs from 'dayjs'
 import minMax from 'dayjs/plugin/minMax'
+import isoWeek from 'dayjs/plugin/isoWeek'
+import weekOfYear from 'dayjs/plugin/weekOfYear'
+import { getDateInfo } from '../utils/holidays'
 
 dayjs.extend(minMax)
+dayjs.extend(isoWeek)
+dayjs.extend(weekOfYear)
 
 // 为不同负责人生成一致的颜色
 const getAssigneeColor = (assignee: string) => {
@@ -181,14 +186,28 @@ const GanttChart = forwardRef<HTMLCanvasElement>((_props, ref) => {
       return
     }
     
-    const minDate = dayjs.min(dates)!.subtract(3, 'day')
-    const maxDate = dayjs.max(dates)!.add(7, 'day')
+    let minDate = dayjs.min(dates)!
+    let maxDate = dayjs.max(dates)!
+    
+    // 根据时间颗粒度调整范围
+    if (ganttConfig.timeScale === 'week') {
+      minDate = minDate.startOf('isoWeek').subtract(1, 'week')
+      maxDate = maxDate.endOf('isoWeek').add(1, 'week')
+    } else if (ganttConfig.timeScale === 'month') {
+      minDate = minDate.startOf('month').subtract(1, 'month')
+      maxDate = maxDate.endOf('month').add(1, 'month')
+    } else {
+      minDate = minDate.subtract(3, 'day')
+      maxDate = maxDate.add(7, 'day')
+    }
+    
     const totalDays = maxDate.diff(minDate, 'day') + 1
     
     console.log('📅 [GanttChart] 时间范围:', {
       minDate: minDate.format('YYYY-MM-DD'),
       maxDate: maxDate.format('YYYY-MM-DD'),
-      totalDays
+      totalDays,
+      timeScale: ganttConfig.timeScale
     })
 
     // 布局常量
@@ -232,58 +251,208 @@ const GanttChart = forwardRef<HTMLCanvasElement>((_props, ref) => {
     ctx.fillText('任务', PHASE_WIDTH + TASK_WIDTH / 2, 20)
     ctx.fillText('负责人', PHASE_WIDTH + TASK_WIDTH + ASSIGNEE_WIDTH / 2, 20)
 
-    // 绘制月份和日期
+    // 绘制时间轴（根据时间颗粒度）
     ctx.textAlign = 'left'
-    let currentMonth = -1
-    let monthStartX = LEFT_WIDTH
     
-    for (let d = 0; d < totalDays; d++) {
-      const date = minDate.add(d, 'day')
-      const x = LEFT_WIDTH + d * dayWidth
-      const month = date.month()
+    if (ganttConfig.timeScale === 'day') {
+      // 日视图：显示月份和日期
+      let currentMonth = -1
+      let monthStartX = LEFT_WIDTH
       
-      // 月份分隔线
-      if (month !== currentMonth) {
-        if (currentMonth !== -1) {
-          ctx.strokeStyle = '#D1D5DB'
-          ctx.lineWidth = 1.5
+      for (let d = 0; d < totalDays; d++) {
+        const date = minDate.add(d, 'day')
+        const x = LEFT_WIDTH + d * dayWidth
+        const month = date.month()
+        const dateInfo = getDateInfo(date)
+        
+        // 月份分隔线
+        if (month !== currentMonth) {
+          if (currentMonth !== -1) {
+            ctx.strokeStyle = '#D1D5DB'
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.moveTo(x, 0)
+            ctx.lineTo(x, rect.height)
+            ctx.stroke()
+            
+            // 绘制月份标签
+            ctx.fillStyle = '#374151'
+            ctx.font = 'bold 11px sans-serif'
+            ctx.fillText(`${date.year()}年${month + 1}月`, monthStartX + 4, 18)
+          }
+          currentMonth = month
+          monthStartX = x
+        }
+        
+        // 日期标签
+        if (d % 2 === 0 || date.date() === 1) {
+          // 根据日期类型设置颜色
+          let textColor = '#9CA3AF'
+          if (ganttConfig.showHolidays && dateInfo.isHoliday) {
+            textColor = '#DC2626' // 节假日红色
+          } else if (dateInfo.isWeekend) {
+            textColor = '#DC2626' // 周末红色
+          } else if (dateInfo.isWorkday) {
+            textColor = '#059669' // 调休工作日绿色
+          }
+          
+          ctx.fillStyle = textColor
+          ctx.font = '9px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(String(date.date()), x + dayWidth / 2, 35)
+          
+          // 星期或节假日名称
+          ctx.font = '8px sans-serif'
+          if (ganttConfig.showHolidays && dateInfo.holidayName) {
+            ctx.fillStyle = '#DC2626'
+            const name = dateInfo.holidayName.length > 3 ? dateInfo.holidayName.substring(0, 3) : dateInfo.holidayName
+            ctx.fillText(name, x + dayWidth / 2, 45)
+          } else {
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+            ctx.fillStyle = textColor
+            ctx.fillText(weekdays[date.day()], x + dayWidth / 2, 45)
+          }
+        }
+      }
+      
+      // 绘制最后一个月份标签
+      if (monthStartX < rect.width - 100) {
+        ctx.fillStyle = '#374151'
+        ctx.font = 'bold 11px sans-serif'
+        ctx.textAlign = 'left'
+        const lastDate = minDate.add(totalDays - 1, 'day')
+        ctx.fillText(`${lastDate.year()}年${lastDate.month() + 1}月`, monthStartX + 4, 18)
+      }
+      
+    } else if (ganttConfig.timeScale === 'week') {
+      // 周视图：显示周数
+      let currentMonth = -1
+      let monthStartX = LEFT_WIDTH
+      let weekCount = 0
+      
+      for (let d = 0; d < totalDays; d++) {
+        const date = minDate.add(d, 'day')
+        const x = LEFT_WIDTH + d * dayWidth
+        const month = date.month()
+        const isMonday = date.day() === 1
+        
+        // 月份分隔线
+        if (month !== currentMonth) {
+          if (currentMonth !== -1) {
+            ctx.strokeStyle = '#D1D5DB'
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.moveTo(x, 0)
+            ctx.lineTo(x, rect.height)
+            ctx.stroke()
+            
+            // 绘制月份标签
+            ctx.fillStyle = '#374151'
+            ctx.font = 'bold 11px sans-serif'
+            ctx.fillText(`${date.year()}年${month + 1}月`, monthStartX + 4, 18)
+          }
+          currentMonth = month
+          monthStartX = x
+        }
+        
+        // 周分隔线和标签（每周一）
+        if (isMonday) {
+          weekCount++
+          ctx.strokeStyle = '#E5E7EB'
+          ctx.lineWidth = 1
           ctx.beginPath()
-          ctx.moveTo(x, 0)
+          ctx.moveTo(x, HEADER_HEIGHT)
           ctx.lineTo(x, rect.height)
           ctx.stroke()
           
-          // 绘制月份标签
-          ctx.fillStyle = '#374151'
-          ctx.font = 'bold 11px sans-serif'
-          ctx.fillText(`${date.year()}年${month + 1}月`, monthStartX + 4, 18)
+          // 周标签
+          const weekNum = date.isoWeek()
+          ctx.fillStyle = '#6B7280'
+          ctx.font = '10px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(`第${weekNum}周`, x + dayWidth * 3.5, 35)
+          
+          // 日期范围
+          const weekEnd = date.add(6, 'day')
+          ctx.font = '8px sans-serif'
+          ctx.fillStyle = '#9CA3AF'
+          ctx.fillText(`${date.format('M/D')}-${weekEnd.format('M/D')}`, x + dayWidth * 3.5, 45)
         }
-        currentMonth = month
-        monthStartX = x
       }
       
-      // 日期标签（每隔一天显示）
-      if (d % 2 === 0 || date.date() === 1) {
-        const isWeekend = date.day() === 0 || date.day() === 6
-        ctx.fillStyle = isWeekend ? '#DC2626' : '#9CA3AF'
-        ctx.font = '9px sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(String(date.date()), x + dayWidth / 2, 35)
-        
-        // 星期
-        const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-        ctx.font = '8px sans-serif'
-        ctx.fillStyle = isWeekend ? '#DC2626' : '#D1D5DB'
-        ctx.fillText(weekdays[date.day()], x + dayWidth / 2, 45)
+      // 绘制最后一个月份标签
+      if (monthStartX < rect.width - 100) {
+        ctx.fillStyle = '#374151'
+        ctx.font = 'bold 11px sans-serif'
+        ctx.textAlign = 'left'
+        const lastDate = minDate.add(totalDays - 1, 'day')
+        ctx.fillText(`${lastDate.year()}年${lastDate.month() + 1}月`, monthStartX + 4, 18)
       }
-    }
-
-    // 绘制最后一个月份标签
-    if (monthStartX < rect.width - 100) {
-      ctx.fillStyle = '#374151'
-      ctx.font = 'bold 11px sans-serif'
-      ctx.textAlign = 'left'
-      const lastDate = minDate.add(totalDays - 1, 'day')
-      ctx.fillText(`${lastDate.year()}年${lastDate.month() + 1}月`, monthStartX + 4, 18)
+      
+    } else if (ganttConfig.timeScale === 'month') {
+      // 月视图：显示月份
+      let currentYear = -1
+      let yearStartX = LEFT_WIDTH
+      
+      for (let d = 0; d < totalDays; d++) {
+        const date = minDate.add(d, 'day')
+        const x = LEFT_WIDTH + d * dayWidth
+        const year = date.year()
+        const isFirstDayOfMonth = date.date() === 1
+        
+        // 年份分隔线
+        if (year !== currentYear) {
+          if (currentYear !== -1) {
+            ctx.strokeStyle = '#D1D5DB'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.moveTo(x, 0)
+            ctx.lineTo(x, rect.height)
+            ctx.stroke()
+            
+            // 绘制年份标签
+            ctx.fillStyle = '#374151'
+            ctx.font = 'bold 12px sans-serif'
+            ctx.fillText(`${year}年`, yearStartX + 4, 18)
+          }
+          currentYear = year
+          yearStartX = x
+        }
+        
+        // 月份分隔线和标签
+        if (isFirstDayOfMonth) {
+          ctx.strokeStyle = '#E5E7EB'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(x, HEADER_HEIGHT)
+          ctx.lineTo(x, rect.height)
+          ctx.stroke()
+          
+          // 月份标签
+          const monthName = `${date.month() + 1}月`
+          const daysInMonth = date.daysInMonth()
+          const monthWidth = daysInMonth * dayWidth
+          
+          ctx.fillStyle = '#6B7280'
+          ctx.font = 'bold 11px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(monthName, x + monthWidth / 2, 35)
+          
+          // 天数
+          ctx.font = '8px sans-serif'
+          ctx.fillStyle = '#9CA3AF'
+          ctx.fillText(`${daysInMonth}天`, x + monthWidth / 2, 45)
+        }
+      }
+      
+      // 绘制最后一个年份标签
+      if (yearStartX < rect.width - 100) {
+        ctx.fillStyle = '#374151'
+        ctx.font = 'bold 12px sans-serif'
+        ctx.textAlign = 'left'
+        const lastDate = minDate.add(totalDays - 1, 'day')
+        ctx.fillText(`${lastDate.year()}年`, yearStartX + 4, 18)
+      }
     }
 
     // 绘制任务行
@@ -369,10 +538,17 @@ const GanttChart = forwardRef<HTMLCanvasElement>((_props, ref) => {
         for (let d = 0; d < totalDays; d++) {
           const date = minDate.add(d, 'day')
           const x = LEFT_WIDTH + d * dayWidth
+          const dateInfo = getDateInfo(date)
           
-          // 周末背景
-          if (ganttConfig.showWeekends && (date.day() === 0 || date.day() === 6)) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.02)'
+          // 节假日和周末背景
+          if (ganttConfig.showHolidays && dateInfo.isHoliday) {
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.08)' // 节假日红色背景
+            ctx.fillRect(x, rowY, dayWidth, ROW_HEIGHT)
+          } else if (ganttConfig.showWeekends && dateInfo.isWeekend && !dateInfo.isWorkday) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.02)' // 周末灰色背景
+            ctx.fillRect(x, rowY, dayWidth, ROW_HEIGHT)
+          } else if (dateInfo.isWorkday) {
+            ctx.fillStyle = 'rgba(5, 150, 105, 0.05)' // 调休工作日绿色背景
             ctx.fillRect(x, rowY, dayWidth, ROW_HEIGHT)
           }
           

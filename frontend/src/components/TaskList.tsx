@@ -4,6 +4,29 @@ import { Task } from '../types'
 import { groupTasksByPhase } from '../utils/ganttRenderer'
 import CommentSection from './CommentSection'
 
+// 为不同负责人生成一致的颜色（与 GanttChart 保持一致）
+const getAssigneeColor = (assignee: string) => {
+  if (!assignee) return { bg: '#E5E7EB', text: '#6B7280' }
+  
+  const colors = [
+    { bg: '#9FE1CB', text: '#085041' }, // 青绿
+    { bg: '#B5D4F4', text: '#0C447C' }, // 蓝色
+    { bg: '#CECBF6', text: '#3C3489' }, // 紫色
+    { bg: '#FFD4A3', text: '#8B4513' }, // 橙色
+    { bg: '#FFB5C5', text: '#8B1538' }, // 粉色
+    { bg: '#C7E9C0', text: '#2D5016' }, // 绿色
+    { bg: '#FED9A6', text: '#7C4A00' }, // 黄色
+    { bg: '#D4C5F9', text: '#4A1D96' }, // 淡紫
+  ]
+  
+  let hash = 0
+  for (let i = 0; i < assignee.length; i++) {
+    hash = assignee.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  return colors[Math.abs(hash) % colors.length]
+}
+
 interface TaskListProps {
   onEditTask: (task: Task) => void
 }
@@ -190,7 +213,13 @@ export default function TaskList({ onEditTask }: TaskListProps) {
                                 </span>
                               )}
                               {task.assignee && (
-                                <span className="flex items-center gap-1">
+                                <span 
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm"
+                                  style={{
+                                    backgroundColor: getAssigneeColor(task.assignee).bg,
+                                    color: getAssigneeColor(task.assignee).text
+                                  }}
+                                >
                                   <span className="material-symbols-outlined text-[16px]">person</span>
                                   {task.assignee}
                                 </span>
