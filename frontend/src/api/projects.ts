@@ -101,3 +101,21 @@ export async function getProjectTasks(projectId: string): Promise<any[]> {
   })
   return response.data.data
 }
+
+// 获取项目成员列表
+export interface ProjectMember {
+  id: string
+  name: string
+  email: string | null
+  role: 'owner' | 'member'
+}
+
+export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const token = localStorage.getItem('token')
+  const response = await axios.get(`${API_URL}/api/projects/${projectId}/members`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  return response.data.data
+}

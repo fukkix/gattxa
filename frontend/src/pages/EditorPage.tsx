@@ -9,9 +9,13 @@ import GanttLegend from '../components/GanttLegend'
 import ShareDialog from '../components/ShareDialog'
 import ExportDialog from '../components/ExportDialog'
 import FileUploadWithParsing from '../components/FileUploadWithParsing'
+import NotificationButton from '../components/NotificationButton'
+import ProjectMembersDialog from '../components/ProjectMembersDialog'
+import OnlineUsers from '../components/OnlineUsers'
 import { Task } from '../types'
 import { getProject, createProject, updateProject } from '../api/projects'
 import { isAuthenticated } from '../api/auth'
+import { websocketService } from '../services/websocket'
 import type { ParseResult } from '../api/upload'
 
 export default function EditorPage() {
@@ -23,15 +27,82 @@ export default function EditorPage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [showFileUpload, setShowFileUpload] = useState(false)
+  const [showMembersDialog, setShowMembersDialog] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [wsConnected, setWsConnected] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     loadProject()
   }, [id])
+
+  // WebSocket 连接和项目房间管理
+  useEffect(() => {
+    if (!currentProject || currentProject.id.startsWith('temp_')) {
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      return
+    }
+
+    // 连接 WebSocket
+    if (!websocketService.isConnected()) {
+      websocketService.connect(token)
+    }
+
+    // 加入项目房间
+    websocketService.joinProject(currentProject.id)
+    setWsConnected(true)
+
+    // 监听实时任务更新
+    websocketService.onTaskCreated((data) => {
+      console.log('收到任务创建事件:', data)
+      useProjectStore.getState().addTask(data.task)
+    })
+
+    websocketService.onTaskUpdated((data) => {
+      console.log('收到任务更新事件:', data)
+      useProjectStore.getState().updateTask(data.task.id, data.task)
+    })
+
+    websocketService.onTaskDeleted((data) => {
+      console.log('收到任务删除事件:', data)
+      useProjectStore.getState().deleteTask(data.taskId)
+    })
+
+    // 监听实时评论更新
+    websocketService.onCommentCreated((data) => {
+      console.log('收到评论创建事件:', data)
+      // 可以在这里触发评论列表刷新
+    })
+
+    websocketService.onCommentUpdated((data) => {
+      console.log('收到评论更新事件:', data)
+    })
+
+    websocketService.onCommentDeleted((data) => {
+      console.log('收到评论删除事件:', data)
+    })
+
+    return () => {
+      // 离开项目房间
+      websocketService.leaveProject()
+      setWsConnected(false)
+      
+      // 移除事件监听器
+      websocketService.off('task:created')
+      websocketService.off('task:updated')
+      websocketService.off('task:deleted')
+      websocketService.off('comment:created')
+      websocketService.off('comment:updated')
+      websocketService.off('comment:deleted')
+    }
+  }, [currentProject])
 
   // 自动保存机制（30秒防抖）
   useEffect(() => {
@@ -294,6 +365,22 @@ export default function EditorPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* WebSocket 连接状态指示器 */}
+              {wsConnected && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-tertiary/10 text-tertiary rounded-lg" title="实时协作已启用">
+                  <div className="w-2 h-2 bg-tertiary rounded-full animate-pulse"></div>
+                  <span className="text-label-sm font-medium">实时</span>
+                </div>
+              )}
+              <NotificationButton />
+              <button
+                onClick={() => setShowMembersDialog(true)}
+                className="px-4 py-2 text-on-surface hover:bg-surface-container rounded-xl transition-all flex items-center gap-2"
+                title="项目成员"
+              >
+                <span className="material-symbols-outlined text-[20px]">group</span>
+                <span className="hidden md:inline">成员</span>
+              </button>
               <button
                 onClick={() => setShowFileUpload(true)}
                 className="px-4 py-2 text-on-surface hover:bg-surface-container rounded-xl transition-all flex items-center gap-2"
@@ -379,6 +466,18 @@ export default function EditorPage() {
               onComplete={handleFileUploadComplete}
             />
           )}
+
+          {/* 项目成员对话框 */}
+          {showMembersDialog && (
+            <ProjectMembersDialog
+              projectId={currentProject.id}
+              projectName={currentProject.name}
+              onClose={() => setShowMembersDialog(false)}
+            />
+          )}
+
+          {/* 在线用户列表 */}
+          {wsConnected && <OnlineUsers projectId={currentProject.id} />}
         </>
       )}
     </div>

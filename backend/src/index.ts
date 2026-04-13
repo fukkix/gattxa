@@ -1,8 +1,10 @@
 import express from 'express'
+import { createServer } from 'http'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger } from './middleware/requestLogger.js'
+import { initializeWebSocket } from './services/websocket.js'
 import authRoutes from './routes/auth.js'
 import projectRoutes from './routes/projects.js'
 import taskRoutes from './routes/tasks.js'
@@ -11,10 +13,13 @@ import parseRoutes from './routes/parse.js'
 import healthRoutes from './routes/health.js'
 import shareRoutes from './routes/share.js'
 import commentRoutes from './routes/comments.js'
+import userRoutes from './routes/users.js'
+import memberRoutes from './routes/members.js'
 
 dotenv.config()
 
 const app = express()
+const httpServer = createServer(app)
 const PORT = process.env.PORT || 3000
 
 // Middleware
@@ -31,12 +36,19 @@ app.use('/api/upload', uploadRoutes)
 app.use('/api/parse', parseRoutes)
 app.use('/api', shareRoutes)
 app.use('/api', commentRoutes)
+app.use('/api', userRoutes)
+app.use('/api', memberRoutes)
 
 // Error handling
 app.use(errorHandler)
 
-app.listen(PORT, () => {
+// Initialize WebSocket
+const io = initializeWebSocket(httpServer)
+console.log('✅ WebSocket 服务已初始化')
+
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`)
   console.log(`📝 Environment: ${process.env.NODE_ENV}`)
   console.log(`📁 Upload directory: ${process.env.UPLOAD_DIR || './uploads'}`)
+  console.log(`🔌 WebSocket ready`)
 })

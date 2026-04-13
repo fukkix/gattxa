@@ -231,4 +231,65 @@ router.get('/:id/tasks', authenticate, async (req: AuthRequest, res, next) => {
   }
 })
 
+// 获取项目成员列表（从任务负责人中提取）
+router.get('/:id/members', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    // 验证项目权限
+    const projectResult = await query('SELECT user_id FROM projects WHERE id = $1', [
+      req.params.id,
+    ])
+
+    if (projectResult.rows.length === 0) {
+      throw createError('项目不存在', 404)
+    }
+
+    if (projectResult.rows[0].user_id !== req.userId) {
+      throw createError('无权访问此项目', 403)
+    }
+
+    // 获取项目所有者
+    const ownerResult = await query(
+      'SELECT id, email, display_name FROM users WHERE id = $1',
+      [projectResult.rows[0].user_id]
+    )
+
+    // 获取所有任务负责人（去重）
+    const tasksResult = await query(
+      'SELECT DISTINCT assignee FROM tasks WHERE project_id = $1 AND assignee IS NOT NULL AND assignee != \'\'',
+      [req.params.id]
+    )
+
+    // 组合成员列表
+    const members = [
+      {
+        id: ownerResult.rows[0].id,
+        name: ownerResult.rows[0].display_name,
+        email: ownerResult.rows[0].email,
+        role: 'owner',
+      },
+      ...tasksResult.rows.map((row) => ({
+        id: row.assignee, // 使用负责人名称作为 ID（因为可能不是系统用户）
+        name: row.assignee,
+        email: null,
+        role: 'member',
+      })),
+    ]
+
+    // 去重（基于 name）
+    const uniqueMembers = members.reduce((acc, member) => {
+      if (!acc.find((m) => m.name === member.name)) {
+        acc.push(member)
+      }
+      return acc
+    }, [] as typeof members)
+
+    res.json({
+      success: true,
+      data: uniqueMembers,
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 export default router

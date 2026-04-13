@@ -44,7 +44,8 @@ export interface ShareLink {
 export interface User {
   id: string
   email: string
-  displayName: string
+  name: string
+  displayName?: string
   createdAt: string
 }
 
@@ -55,4 +56,21 @@ export interface Comment {
   content: string
   mentions: string[]
   createdAt: string
+  updatedAt: string
+  user_name?: string
+  user_email?: string
+}
+
+export interface Notification {
+  comment_id: string
+  content: string
+  created_at: string
+  task_id: string
+  task_name: string
+  project_id: string
+  project_name: string
+  user_id: string
+  user_name: string
+  user_email: string
+  is_read: boolean
 }

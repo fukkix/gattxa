@@ -16,7 +16,15 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      navigate('/')
+      
+      // 检查是否有待处理的邀请
+      const pendingInvitation = localStorage.getItem('pendingInvitation')
+      if (pendingInvitation) {
+        localStorage.removeItem('pendingInvitation')
+        navigate(`/invitation/${pendingInvitation}`)
+      } else {
+        navigate('/')
+      }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || '登录失败，请重试')
     } finally {

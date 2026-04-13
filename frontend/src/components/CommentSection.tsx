@@ -4,6 +4,8 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
+import MentionAutocomplete from './MentionAutocomplete'
+import { websocketService } from '../services/websocket'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -58,11 +60,16 @@ export default function CommentSection({ task, onClose }: CommentSectionProps) {
       // 提取 @ 提及
       const mentions = extractMentions(newComment)
       
-      await axios.post(
+      const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/tasks/${task.id}/comments`,
         { content: newComment, mentions },
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      
+      // 发送 WebSocket 事件
+      if (websocketService.isConnected()) {
+        websocketService.emitCommentCreate(task.projectId, response.data)
+      }
       
       setNewComment('')
       await loadComments()
@@ -79,11 +86,16 @@ export default function CommentSection({ task, onClose }: CommentSectionProps) {
 
     try {
       const token = localStorage.getItem('token')
-      await axios.put(
+      const response = await axios.put(
         `${import.meta.env.VITE_API_URL}/api/comments/${commentId}`,
         { content: editContent },
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      
+      // 发送 WebSocket 事件
+      if (websocketService.isConnected()) {
+        websocketService.emitCommentUpdate(task.projectId, response.data)
+      }
       
       setEditingId(null)
       setEditContent('')
@@ -103,6 +115,11 @@ export default function CommentSection({ task, onClose }: CommentSectionProps) {
         `${import.meta.env.VITE_API_URL}/api/comments/${commentId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      
+      // 发送 WebSocket 事件
+      if (websocketService.isConnected()) {
+        websocketService.emitCommentDelete(task.projectId, commentId)
+      }
       
       await loadComments()
     } catch (error) {
@@ -231,17 +248,17 @@ export default function CommentSection({ task, onClose }: CommentSectionProps) {
 
         {/* 输入框 */}
         <form onSubmit={handleSubmit} className="px-6 py-4 border-t border-gray-200">
-          <textarea
+          <MentionAutocomplete
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
+            onChange={setNewComment}
+            projectId={task.projectId}
             placeholder="输入评论... (使用 @ 提及其他人)"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
             rows={3}
             disabled={loading}
           />
           <div className="flex items-center justify-between mt-3">
             <div className="text-sm text-gray-500">
-              支持 @ 提及，例如：@张三
+              输入 @ 可以提及其他人，使用 ↑↓ 选择
             </div>
             <button
               type="submit"

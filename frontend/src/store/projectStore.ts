@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Task, Project, GanttConfig } from '../types'
 import { updateProject as apiUpdateProject } from '../api/projects'
+import { websocketService } from '../services/websocket'
 
 interface ProjectState {
   currentProject: Project | null
@@ -46,6 +47,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   addTask: (task) => set((state) => {
     const updatedTasks = [...state.tasks, task]
     if (state.currentProject) {
+      // 发送 WebSocket 事件
+      if (websocketService.isConnected()) {
+        websocketService.emitTaskCreate(state.currentProject.id, task)
+      }
       return {
         tasks: updatedTasks,
         currentProject: { ...state.currentProject, tasks: updatedTasks }
@@ -60,6 +65,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         task.id === id ? { ...task, ...updates } : task
       )
       if (state.currentProject) {
+        // 发送 WebSocket 事件
+        if (websocketService.isConnected()) {
+          const updatedTask = updatedTasks.find(t => t.id === id)
+          if (updatedTask) {
+            websocketService.emitTaskUpdate(state.currentProject.id, updatedTask)
+          }
+        }
         return {
           tasks: updatedTasks,
           currentProject: { ...state.currentProject, tasks: updatedTasks }
@@ -71,6 +83,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   deleteTask: (id) => set((state) => {
     const updatedTasks = state.tasks.filter((task) => task.id !== id)
     if (state.currentProject) {
+      // 发送 WebSocket 事件
+      if (websocketService.isConnected()) {
+        websocketService.emitTaskDelete(state.currentProject.id, id)
+      }
       return {
         tasks: updatedTasks,
         currentProject: { ...state.currentProject, tasks: updatedTasks }
