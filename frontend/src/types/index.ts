@@ -10,6 +10,7 @@ export interface Task {
   isMilestone: boolean
   dependencies: string[] // Task IDs
   position: number
+  version: number // 版本号，用于冲突检测
   createdAt: string
   updatedAt: string
 }

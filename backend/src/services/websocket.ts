@@ -151,8 +151,9 @@ export function initializeWebSocket(httpServer: HTTPServer) {
       }
     })
 
-    socket.on('task:update', async (data: { projectId: string; task: any }) => {
+    socket.on('task:update', async (data: { projectId: string; task: any; expectedVersion?: number }) => {
       try {
+        // 广播给房间内其他用户
         socket.to(`project:${data.projectId}`).emit('task:updated', {
           task: data.task,
           userId: socket.userId,

@@ -12,6 +12,7 @@ import FileUploadWithParsing from '../components/FileUploadWithParsing'
 import NotificationButton from '../components/NotificationButton'
 import ProjectMembersDialog from '../components/ProjectMembersDialog'
 import OnlineUsers from '../components/OnlineUsers'
+import ConflictDialog from '../components/ConflictDialog'
 import { Task } from '../types'
 import { getProject, createProject, updateProject } from '../api/projects'
 import { isAuthenticated } from '../api/auth'
@@ -21,7 +22,7 @@ import type { ParseResult } from '../api/upload'
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { currentProject, setProject, isSaving, lastSaved, saveProject } = useProjectStore()
+  const { currentProject, setProject, isSaving, lastSaved, saveProject, conflicts, resolveConflict, removeConflict } = useProjectStore()
   const [showTaskForm, setShowTaskForm] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
@@ -67,7 +68,31 @@ export default function EditorPage() {
 
     websocketService.onTaskUpdated((data) => {
       console.log('收到任务更新事件:', data)
-      useProjectStore.getState().updateTask(data.task.id, data.task)
+      const store = useProjectStore.getState()
+      const localTask = store.tasks.find(t => t.id === data.task.id)
+      
+      if (localTask) {
+        // 检查版本冲突
+        if (localTask.version !== data.task.version - 1) {
+          console.warn('检测到版本冲突:', {
+            local: localTask.version,
+            remote: data.task.version
+          })
+          
+          // 添加到冲突列表
+          store.addConflict({
+            taskId: data.task.id,
+            localTask,
+            remoteTask: data.task
+          })
+        } else {
+          // 无冲突，直接更新（跳过 WebSocket 广播）
+          store.updateTask(data.task.id, data.task, true)
+        }
+      } else {
+        // 新任务，直接添加
+        store.updateTask(data.task.id, data.task, true)
+      }
     })
 
     websocketService.onTaskDeleted((data) => {
@@ -269,6 +294,48 @@ export default function EditorPage() {
 
   const handleExport = () => {
     setShowExportDialog(true)
+  }
+
+  const handleConflictResolve = (
+    taskId: string,
+    resolution: 'local' | 'remote' | 'merge',
+    mergedTask?: Partial<Task>
+  ) => {
+    const conflict = conflicts.find(c => c.taskId === taskId)
+    if (!conflict) return
+
+    let resolvedTask: Task
+
+    if (resolution === 'local') {
+      // 使用本地版本，但更新版本号为远程版本号
+      resolvedTask = { ...conflict.localTask, version: conflict.remoteTask.version }
+    } else if (resolution === 'remote') {
+      // 使用远程版本
+      resolvedTask = conflict.remoteTask
+    } else {
+      // 使用合并后的版本
+      resolvedTask = {
+        ...conflict.remoteTask,
+        ...mergedTask,
+        version: conflict.remoteTask.version
+      }
+    }
+
+    // 解决冲突
+    resolveConflict(taskId, resolvedTask)
+
+    // 发送更新到服务器
+    if (websocketService.isConnected() && currentProject) {
+      websocketService.emitTaskUpdate(currentProject.id, resolvedTask, resolvedTask.version)
+    }
+  }
+
+  const handleConflictCancel = (taskId: string) => {
+    // 取消冲突解决，使用远程版本
+    const conflict = conflicts.find(c => c.taskId === taskId)
+    if (conflict) {
+      resolveConflict(taskId, conflict.remoteTask)
+    }
   }
 
   return (
@@ -478,6 +545,19 @@ export default function EditorPage() {
 
           {/* 在线用户列表 */}
           {wsConnected && <OnlineUsers projectId={currentProject.id} />}
+
+          {/* 冲突解决对话框 */}
+          {conflicts.length > 0 && conflicts.map((conflict) => (
+            <ConflictDialog
+              key={conflict.taskId}
+              localTask={conflict.localTask}
+              remoteTask={conflict.remoteTask}
+              onResolve={(resolution, mergedTask) =>
+                handleConflictResolve(conflict.taskId, resolution, mergedTask)
+              }
+              onCancel={() => handleConflictCancel(conflict.taskId)}
+            />
+          ))}
         </>
       )}
     </div>

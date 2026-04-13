@@ -131,8 +131,8 @@ class WebSocketService {
   }
 
   // 发送任务更新事件
-  emitTaskUpdate(projectId: string, task: any) {
-    this.socket?.emit('task:update', { projectId, task })
+  emitTaskUpdate(projectId: string, task: any, expectedVersion?: number) {
+    this.socket?.emit('task:update', { projectId, task, expectedVersion })
   }
 
   // 监听任务更新

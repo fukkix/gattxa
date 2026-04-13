@@ -19,6 +19,7 @@ export type TaskInput = z.infer<typeof TaskSchema>
 
 export interface Task extends TaskInput {
   id: string
+  version: number
   createdAt: string
   updatedAt: string
 }
@@ -29,8 +30,8 @@ export const createTask = async (taskData: TaskInput): Promise<Task> => {
   const result = await query(
     `INSERT INTO tasks (
       project_id, name, start_date, end_date, assignee, phase,
-      description, is_milestone, dependencies, position
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      description, is_milestone, dependencies, position, version
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1)
     RETURNING *`,
     [
       validated.projectId,
@@ -49,53 +50,88 @@ export const createTask = async (taskData: TaskInput): Promise<Task> => {
   return mapTaskFromDb(result.rows[0])
 }
 
-export const updateTask = async (id: string, taskData: Partial<TaskInput>): Promise<Task> => {
+export const updateTask = async (
+  id: string, 
+  taskData: Partial<TaskInput>, 
+  expectedVersion?: number
+): Promise<Task> => {
   const updates: string[] = []
   const values: any[] = []
   let paramCount = 1
 
   if (taskData.name !== undefined) {
-    updates.push(`name = $${paramCount++}`)
+    updates.push(`name = $${paramCount}`)
     values.push(taskData.name)
+    paramCount++
   }
   if (taskData.startDate !== undefined) {
-    updates.push(`start_date = $${paramCount++}`)
+    updates.push(`start_date = $${paramCount}`)
     values.push(taskData.startDate)
+    paramCount++
   }
   if (taskData.endDate !== undefined) {
-    updates.push(`end_date = $${paramCount++}`)
+    updates.push(`end_date = $${paramCount}`)
     values.push(taskData.endDate)
+    paramCount++
   }
   if (taskData.assignee !== undefined) {
-    updates.push(`assignee = $${paramCount++}`)
+    updates.push(`assignee = $${paramCount}`)
     values.push(taskData.assignee)
+    paramCount++
   }
   if (taskData.phase !== undefined) {
-    updates.push(`phase = $${paramCount++}`)
+    updates.push(`phase = $${paramCount}`)
     values.push(taskData.phase)
+    paramCount++
   }
   if (taskData.description !== undefined) {
-    updates.push(`description = $${paramCount++}`)
+    updates.push(`description = $${paramCount}`)
     values.push(taskData.description)
+    paramCount++
   }
   if (taskData.isMilestone !== undefined) {
-    updates.push(`is_milestone = $${paramCount++}`)
+    updates.push(`is_milestone = $${paramCount}`)
     values.push(taskData.isMilestone)
+    paramCount++
   }
   if (taskData.dependencies !== undefined) {
-    updates.push(`dependencies = $${paramCount++}`)
+    updates.push(`dependencies = $${paramCount}`)
     values.push(JSON.stringify(taskData.dependencies))
+    paramCount++
   }
 
+  // 增加版本号
+  updates.push(`version = version + 1`)
   updates.push(`updated_at = NOW()`)
+  
+  // 添加 ID 参数
   values.push(id)
+  const idParam = paramCount
+  paramCount++
+
+  // 构建 WHERE 子句
+  let whereClause = `id = $${idParam}`
+  if (expectedVersion !== undefined) {
+    values.push(expectedVersion)
+    whereClause += ` AND version = $${paramCount}`
+    paramCount++
+  }
 
   const result = await query(
-    `UPDATE tasks SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE tasks SET ${updates.join(', ')} WHERE ${whereClause} RETURNING *`,
     values
   )
 
   if (result.rows.length === 0) {
+    if (expectedVersion !== undefined) {
+      // 检查任务是否存在
+      const checkResult = await query('SELECT version FROM tasks WHERE id = $1', [id])
+      if (checkResult.rows.length === 0) {
+        throw new Error('Task not found')
+      }
+      // 版本冲突
+      throw new Error('Version conflict')
+    }
     throw new Error('Task not found')
   }
 
@@ -133,7 +169,7 @@ export const batchCreateOrUpdateTasks = async (
           `UPDATE tasks SET
             name = $1, start_date = $2, end_date = $3, assignee = $4,
             phase = $5, description = $6, is_milestone = $7,
-            dependencies = $8, position = $9, updated_at = NOW()
+            dependencies = $8, position = $9, version = version + 1, updated_at = NOW()
           WHERE id = $10 AND project_id = $11
           RETURNING *`,
           [
@@ -158,8 +194,8 @@ export const batchCreateOrUpdateTasks = async (
         const result = await client.query(
           `INSERT INTO tasks (
             project_id, name, start_date, end_date, assignee, phase,
-            description, is_milestone, dependencies, position
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            description, is_milestone, dependencies, position, version
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1)
           RETURNING *`,
           [
             projectId,
@@ -205,6 +241,7 @@ const mapTaskFromDb = (row: any): Task => ({
   isMilestone: row.is_milestone,
   dependencies: typeof row.dependencies === 'string' ? JSON.parse(row.dependencies) : row.dependencies,
   position: row.position,
+  version: row.version || 1,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
