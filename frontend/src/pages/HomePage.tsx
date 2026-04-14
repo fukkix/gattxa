@@ -105,17 +105,6 @@ export default function HomePage() {
             <h1 className="text-xl font-black tracking-tight text-primary font-headline">
               GanttXa
             </h1>
-            <nav className="hidden md:flex gap-6">
-              <a href="#" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-sm">
-                Dashboard
-              </a>
-              <a href="#" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-sm">
-                Templates
-              </a>
-              <a href="#" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-sm">
-                Pricing
-              </a>
-            </nav>
           </div>
 
           <div className="flex items-center gap-4">
